@@ -1,0 +1,14 @@
+{
+  "name": "@mindcheck/types",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@mindcheck/tsconfig": "workspace:*",
+    "typescript": "5.9.2"
+  }
+}

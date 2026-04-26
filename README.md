@@ -1,159 +1,440 @@
-# Turborepo starter
+# MindCheck
 
-This Turborepo starter is maintained by the Turborepo core team.
+Plataforma de monitoreo de bienestar estudiantil basada en el **Maslach Burnout Inventory — Student Survey (MBI-SS)**. Detecta niveles de burnout, registra check-ins diarios y conecta estudiantes con tutores y recursos de apoyo.
 
-## Using this example
+---
 
-Run the following command:
+## Stack tecnológico
 
-```sh
-npx create-turbo@latest
+| Capa | Tecnología |
+|------|-----------|
+| Web dashboard | Next.js 16 (App Router) + React 19 |
+| App móvil | Expo 54 + React Native 0.81 + NativeWind |
+| Backend / API | FastAPI 0.115 (Python 3.12) |
+| Base de datos | PostgreSQL 17 vía Supabase |
+| Autenticación | Supabase Auth (JWT) |
+| Monorepo | Turborepo + pnpm workspaces |
+
+---
+
+## Arquitectura
+
+```
+┌─────────────────────────────────────────┐
+│               CLIENTES                  │
+│  ┌──────────────┐  ┌─────────────────┐  │
+│  │  Dashboard   │  │  Mobile (Expo)  │  │
+│  │  Next.js 16  │  │  React Native   │  │
+│  └──────┬───────┘  └────────┬────────┘  │
+└─────────┼────────────────────┼──────────┘
+          │                    │
+          ▼                    ▼
+┌─────────────────────────────────────────┐
+│                BACKEND                  │
+│  ┌──────────────┐  ┌─────────────────┐  │
+│  │   FastAPI    │  │    Supabase     │  │
+│  │   :8000      │  │  Auth / Realtime│  │
+│  │  Scoring MBI │  │  Storage / RLS  │  │
+│  │  Alertas     │  │                 │  │
+│  └──────┬───────┘  └────────┬────────┘  │
+└─────────┼────────────────────┼──────────┘
+          └──────────┬─────────┘
+                     ▼
+          ┌──────────────────┐
+          │  PostgreSQL 17   │
+          │   (Supabase)     │
+          └──────────────────┘
 ```
 
-## What's inside?
+**Responsabilidades por capa:**
 
-This Turborepo includes the following packages/apps:
+- **Supabase** — autenticación, base de datos, RLS (Row Level Security), storage y realtime
+- **FastAPI** — lógica de negocio: scoring MBI-SS, detección de crisis, procesamiento de alertas
+- **Dashboard** — panel web para estudiantes, tutores y administradores
+- **Mobile** — app para estudiantes: check-ins diarios y cuestionarios
 
-### Apps and Packages
+---
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Estructura del monorepo
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```
+mindcheck/
+├── apps/
+│   ├── dashboard/          # Next.js — panel web
+│   ├── mobile/             # Expo — app móvil
+│   └── api/                # FastAPI — backend de lógica
+├── packages/
+│   ├── types/              # Tipos TypeScript compartidos
+│   ├── constants/          # Lógica MBI-SS + escala Likert
+│   ├── supabase/           # Cliente Supabase tipado + Database types
+│   ├── ui/                 # Componentes React compartidos
+│   ├── eslint-config/      # Configuración ESLint
+│   └── typescript-config/  # Configuraciones TypeScript base
+├── supabase/
+│   ├── config.toml         # Configuración Supabase local
+│   └── migrations/         # Migraciones SQL
+├── turbo.json
+├── pnpm-workspace.yaml
+└── package.json
 ```
 
-Without global `turbo`, use your package manager:
+---
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+## Apps
+
+### `apps/dashboard` — Panel web
+
+Next.js 16 con App Router. Dirigido a estudiantes, tutores y administradores.
+
+```
+apps/dashboard/
+├── app/
+│   ├── layout.tsx          # Root layout
+│   ├── globals.css
+│   └── page.tsx
+├── lib/
+│   └── supabase/
+│       ├── browser.ts      # Cliente para Client Components
+│       └── server.ts       # Cliente para Server Components (cookies)
+├── .env.local
+├── next.config.js
+└── tsconfig.json
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+**Dependencias clave:**
+- `@supabase/ssr` — autenticación SSR con cookies
+- `react-hook-form` + `zod` — formularios con validación
+- `recharts` — gráficos de burnout
+- `zustand` — manejo de estado global
+- `lucide-react` — iconos
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+---
 
-```sh
-turbo build --filter=docs
+### `apps/mobile` — App móvil
+
+Expo 54 con Expo Router (file-based routing) y NativeWind (Tailwind para React Native).
+
+```
+apps/mobile/
+├── app/
+│   ├── _layout.tsx         # Root layout con SafeAreaProvider
+│   └── index.tsx           # Pantalla inicial
+├── lib/
+│   └── supabase.ts         # Cliente Supabase con AsyncStorage
+├── assets/                 # Íconos y splash screen
+├── app.json                # Configuración Expo (bundle IDs, plugins)
+├── tailwind.config.js
+├── metro.config.js
+└── .env
 ```
 
-Without global `turbo`:
+**Bundle IDs:**
+- iOS: `com.mindcheck.app`
+- Android: `com.mindcheck.app`
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+**Dependencias clave:**
+- `nativewind` — Tailwind para React Native
+- `@react-native-async-storage/async-storage` — persistencia de sesión
+- `expo-router` — navegación file-based
+- `expo-notifications` — notificaciones push
+- `expo-secure-store` — almacenamiento seguro de tokens
+- `react-hook-form` + `zod` — formularios con validación
+- `victory-native` — gráficos
+
+---
+
+### `apps/api` — Backend FastAPI
+
+Servicio Python que maneja la lógica de scoring MBI-SS y alertas de crisis.
+
+```
+apps/api/
+├── app/
+│   ├── main.py             # FastAPI app + middleware CORS
+│   ├── core/
+│   │   ├── config.py       # Variables de entorno (pydantic-settings)
+│   │   └── auth.py         # Verificación JWT de Supabase
+│   ├── routers/
+│   │   ├── assessments.py  # Inicio y envío de cuestionarios
+│   │   ├── checkins.py     # Check-ins diarios
+│   │   └── scores.py       # Historial de scores
+│   ├── schemas/
+│   │   ├── assessment.py   # Pydantic models para assessments
+│   │   └── checkin.py      # Pydantic models para check-ins
+│   └── services/
+│       ├── supabase.py     # Clientes admin y user
+│       └── scoring.py      # Algoritmo de scoring MBI-SS
+├── requirements.txt
+├── pyproject.toml
+├── .env
+└── .env.example
 ```
 
-### Develop
+**Endpoints disponibles:**
 
-To develop all apps and packages, run the following command:
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/api/v1/assessments/start` | Inicia un assessment MBI-SS |
+| `POST` | `/api/v1/assessments/{id}/submit` | Envía respuestas y calcula burnout |
+| `POST` | `/api/v1/checkins/` | Registra check-in diario |
+| `GET` | `/api/v1/checkins/` | Lista check-ins del usuario autenticado |
+| `GET` | `/api/v1/scores/latest` | Último score de burnout |
+| `GET` | `/api/v1/scores/history` | Historial de scores |
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+Documentación interactiva disponible en `http://localhost:8000/docs` cuando el servidor está corriendo.
 
-```sh
-cd my-turborepo
-turbo dev
+---
+
+## Packages compartidos
+
+### `@mindcheck/types`
+
+Tipos TypeScript usados en todas las apps y packages.
+
+```typescript
+type UserRole        = 'student' | 'tutor' | 'admin'
+type BurnoutRiskLevel = 'low' | 'medium' | 'high'
+type MBIDimension    = 'exhaustion' | 'cynicism' | 'efficacy'
+
+interface DailyCheckin { mood, sleep_hours, stress_level, study_hours, notes }
+interface BurnoutScore  { exhaustion_mean, cynicism_mean, efficacy_mean, risk_level }
 ```
 
-Without global `turbo`, use your package manager:
+### `@mindcheck/constants`
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
+Lógica del algoritmo MBI-SS en TypeScript.
+
+- `MBI_SS_SCALE` — escala Likert 0–6 en español (Nunca → Todos los días)
+- `classifyDimension()` — clasifica una dimensión contra los cutoffs de población
+- `overallRisk()` — combina las 3 dimensiones en un nivel de riesgo general
+- `computeDimensionMeans()` — calcula promedios por dimensión desde respuestas crudas
+
+### `@mindcheck/supabase`
+
+Cliente Supabase totalmente tipado con los tipos auto-generados de la base de datos.
+
+```typescript
+import { createSupabaseClient, type Database } from '@mindcheck/supabase'
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+### `@mindcheck/ui`
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+Componentes React compartidos entre el dashboard y futuras apps web.
 
-```sh
-turbo dev --filter=web
+---
+
+## Base de datos
+
+El esquema completo vive en `supabase/migrations/`. Contiene 17 tablas con RLS habilitado en todas.
+
+| Tabla | Descripción |
+|-------|-------------|
+| `profiles` | Extiende `auth.users` con rol y contexto académico |
+| `consents` | Audit trail de consentimientos (solo INSERT, inmutable) |
+| `user_preferences` | Idioma, tema y configuración de notificaciones |
+| `daily_checkins` | Pulso diario (mood 1–5, sueño, estrés, horas de estudio) |
+| `instruments` | Catálogo de instrumentos psicométricos (MBI-SS, PSS-10, PHQ-9, GAD-7) |
+| `instrument_items` | 15 ítems del MBI-SS bloqueados en español |
+| `instrument_cutoffs` | Umbrales de riesgo por dimensión (Schaufeli et al., 2002) |
+| `assessments` | Sesiones de cuestionario (started / completed / abandoned) |
+| `assessment_responses` | Respuestas individuales a cada ítem |
+| `burnout_scores` | Resultados calculados por sesión |
+| `crisis_events` | Eventos de crisis detectados (watch / warning / urgent) |
+| `resources` | Biblioteca de contenido y recursos de apoyo |
+| `resource_views` | Tracking de vistas y feedback (helpful) |
+| `tutor_student_relationships` | Relaciones tutor-estudiante (pending / active / revoked) |
+| `notification_log` | Registro de notificaciones enviadas |
+| `admin_audit_log` | Audit trail de acciones administrativas |
+
+**Triggers automáticos:**
+- Al crear un usuario → se crea su `profile` y `user_preferences` automáticamente
+- Todas las tablas actualizan `updated_at` automáticamente
+
+**Política de acceso (RLS):**
+- Cada usuario solo ve sus propios datos
+- Un tutor activo puede ver los datos de sus estudiantes
+- Un admin tiene acceso completo
+
+---
+
+## Configuración inicial
+
+### Requisitos previos
+
+- Node.js >= 18
+- pnpm >= 9
+- Python >= 3.12
+- Supabase CLI
+
+### 1. Clonar e instalar dependencias JS
+
+```bash
+git clone <repo-url>
+cd mindcheck
+pnpm install
 ```
 
-Without global `turbo`:
+### 2. Variables de entorno
 
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+**Dashboard** (`apps/dashboard/.env.local`):
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 ```
 
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
+**Mobile** (`apps/mobile/.env`):
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+EXPO_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
+**API** (`apps/api/.env`):
+```env
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_JWT_SECRET=<jwt-secret>
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+> El `SUPABASE_JWT_SECRET` se encuentra en: **Supabase Dashboard → Project Settings → API → JWT Secret**
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+### 3. Entorno Python (API)
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
+```bash
+cd apps/api
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Without global `turbo`:
+### 4. Aplicar migraciones de base de datos
 
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
+```bash
+# Con Supabase local
+supabase start
+supabase db reset
+
+# Con Supabase Cloud (proyecto ya creado)
+supabase link --project-ref <project-ref>
+supabase db push
 ```
 
-## Useful Links
+---
 
-Learn more about the power of Turborepo:
+## Levantar el proyecto en desarrollo
 
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+### Todo junto (recomendado)
+
+```bash
+pnpm dev
+```
+
+Esto levanta el dashboard (`:3000`) y la app móvil en paralelo usando Turborepo.
+
+La API FastAPI se levanta por separado:
+```bash
+cd apps/api
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+```
+
+### Por separado
+
+```bash
+# Dashboard
+cd apps/dashboard && pnpm dev
+# → http://localhost:3000
+
+# Mobile
+cd apps/mobile && pnpm dev
+# → Expo DevTools, escanea el QR con Expo Go
+
+# API
+cd apps/api && uvicorn app.main:app --reload --port 8000
+# → http://localhost:8000
+# → Docs: http://localhost:8000/docs
+```
+
+---
+
+## Comandos útiles
+
+```bash
+# Instalar todas las dependencias
+pnpm install
+
+# Build de producción
+pnpm build
+
+# Lint de todo el monorepo
+pnpm lint
+
+# Type checking
+pnpm check-types
+
+# Formatear código
+pnpm format
+
+# Regenerar tipos de Supabase (después de cambios en la BD)
+supabase gen types typescript --linked > packages/supabase/src/database.types.ts
+
+# Ejecutar solo una app con Turborepo
+pnpm dev --filter=@mindcheck/dashboard
+pnpm dev --filter=@mindcheck/mobile
+```
+
+---
+
+## Flujo de autenticación
+
+```
+Usuario           Dashboard / Mobile          Supabase Auth       FastAPI
+  │                       │                        │                 │
+  ├── signup / login ────►│                        │                 │
+  │                       ├── signUp/signIn() ────►│                 │
+  │                       │◄── JWT access_token ───┤                 │
+  │                       │                        │                 │
+  │◄── redirige al home ──┤                        │                 │
+  │                       │                        │                 │
+  ├── acción protegida ──►│                        │                 │
+  │            POST /api/v1/... + Bearer <token>  ─────────────────►│
+  │                       │                        │   verifica JWT  │
+  │                       │                        │◄────────────────┤
+  │                       │◄────────── respuesta ──────────────────  │
+  │◄── resultado ─────────┤
+```
+
+---
+
+## Variables de entorno — resumen completo
+
+| Variable | App | Descripción |
+|----------|-----|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Dashboard | URL del proyecto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Dashboard | Clave anon (pública, segura en cliente) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Dashboard | Clave service role (solo servidor) |
+| `EXPO_PUBLIC_SUPABASE_URL` | Mobile | URL del proyecto Supabase |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Mobile | Clave anon (pública) |
+| `EXPO_PUBLIC_API_URL` | Mobile | URL del backend FastAPI |
+| `SUPABASE_URL` | API | URL del proyecto Supabase |
+| `SUPABASE_ANON_KEY` | API | Clave anon |
+| `SUPABASE_SERVICE_ROLE_KEY` | API | Clave service role (bypasa RLS) |
+| `SUPABASE_JWT_SECRET` | API | Secreto para verificar tokens JWT |
+
+---
+
+## Contribuir
+
+1. Crea una rama desde `main`:
+   ```bash
+   git checkout -b feature/nombre-del-feature
+   ```
+2. Haz tus cambios
+3. Verifica que pasan los checks:
+   ```bash
+   pnpm lint && pnpm check-types
+   ```
+4. Abre un Pull Request describiendo los cambios
